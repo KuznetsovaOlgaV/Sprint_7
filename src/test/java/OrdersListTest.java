@@ -1,17 +1,12 @@
-import io.restassured.http.ContentType;
-import io.restassured.RestAssured;
+import api.OrdersApiClient;
+import io.qameta.allure.Description;
 import org.junit.Test;
 
 public class OrdersListTest {
 
+    @Description("Запрос GET /api/v1/orders возвращает список заказов с 200 и JSON-ответом")
     @Test
     public void getOrdersList() {
-        RestAssured.given()
-                .when()
-                .get("/api/v1/orders")
-                .then()
-                .assertThat()
-                .statusCode(200)
-                .contentType(ContentType.JSON);
+        OrdersApiClient.getOrdersList();
     }
 }

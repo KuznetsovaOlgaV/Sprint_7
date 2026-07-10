@@ -1,68 +1,80 @@
-import pojo.OrderCreatePojo;
+import api.OrdersApiClient;
+import io.qameta.allure.Description;
 import io.qameta.allure.Step;
-import io.restassured.RestAssured;
-import io.restassured.http.ContentType;
-import org.junit.BeforeClass;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
-import java.util.Arrays;
-import java.util.Collection;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.UUID;
 
-import static org.hamcrest.Matchers.notNullValue;
-
-@RunWith(Parameterized.class)
 public class OrderCreateParametrizedTest {
 
-    private static final String BASE_URI = "https://qa-scooter.praktikum-services.ru";
-    private static final String PATH = "/api/v1/orders";
-
-    private final List<String> colors;
-
-    public OrderCreateParametrizedTest(List<String> colors) {
-        this.colors = colors;
+    private String getUniqueFirstName() {
+        return "FirstName_" + UUID.randomUUID().toString().substring(0, 9);
     }
 
-    @Parameterized.Parameters
-    public static Collection<Object[]> data() {
-        return Arrays.asList(new Object[][]{
-                {null},
-                {List.of("BLACK")}, //BLACK или GREY
-                {List.of("BLACK", "GREY")}
-        });
+    private String getUniqueLastName() {
+        return "LastName_" + UUID.randomUUID().toString().substring(0, 9);
     }
 
-    @BeforeClass
-    public static void setup() {
-        RestAssured.baseURI = BASE_URI;
+    private String getUniqueAddress() {
+        return "Address_" + UUID.randomUUID().toString().substring(0, 9);
     }
 
-    @Step("Создание заказа с цветами: {colors}")
+    private String getUniqueMetro() {
+        return "Metro_" + UUID.randomUUID().toString().substring(0, 9);
+    }
+
+    private String getUniquePhone() {
+        return "+7999" + (int) (Math.random() * 9000000 + 1000000);
+    }
+
+    private String getUniqueComment() {
+        return "Оставить у двери_" + UUID.randomUUID().toString().substring(0, 9);
+    }
+
+    private String getDeliveryDate() {
+        return LocalDate.now().plusDays(2).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+    }
+
+    @Description("Заказ с null")
     @Test
-    public void createOrderWithColors() {
-        OrderCreatePojo body = new OrderCreatePojo(
-                "Анна",
-                "Сахно",
-                "Бульвар Рокоссовского, 15",
-                "Сокольники",
-                "79981212357",
-                11,
-                "2020-07-12",
-                "Оставить у двери",
+    public void createOrderWithNullColors() {
+        createOrderWithColors(null);
+    }
+
+    @Description("Заказ с BLACK")
+    @Test
+    public void createOrderWithBlackColor() {
+        createOrderWithColors(List.of("BLACK"));
+    }
+
+    @Description("Заказ с GREY")
+    @Test
+    public void createOrderWithGreyColor() {
+        createOrderWithColors(List.of("GREY"));
+    }
+
+    @Description("Заказ с цветами BLACK и GREY")
+    @Test
+    public void createOrderWithBothColors() {
+        createOrderWithColors(List.of("BLACK", "GREY"));
+    }
+
+    @Step("Создаём заказ (rentTime=11)")
+    private void createOrderWithColors(List<String> colors) {
+        var body = new pojo.OrderCreatePojo(
+                getUniqueFirstName(),
+                getUniqueLastName(),
+                getUniqueAddress(),
+                getUniqueMetro(),
+                getUniquePhone(),
+                11,  //в условиях нет инфо, потому условно 11, остальное по п.14 В тестах нет хардкода. вроде по максимуму
+                getDeliveryDate(),
+                getUniqueComment(),
                 colors
         );
-
-        RestAssured
-                .given()
-                .header("Content-type", "application/json")
-                .body(body)
-                .when()
-                .post(PATH)
-                .then()
-                .statusCode(201)
-                .contentType(ContentType.JSON)
-                .body("track", notNullValue());
+        OrdersApiClient.createOrder(body);
     }
 }

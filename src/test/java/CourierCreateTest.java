@@ -1,72 +1,72 @@
-import io.qameta.allure.junit4.AllureJunit4;
-import io.restassured.RestAssured;
-import org.junit.runner.RunWith;
-import pojo.CourierPojo;
-import io.qameta.allure.Step;
+import api.CourierApiClient;
+import io.qameta.allure.Description;
+import org.junit.After;
 import org.junit.Test;
+import pojo.CourierPojo;
 
-import static org.hamcrest.CoreMatchers.containsString;
+public class CourierCreateTest {
 
+    private String currentTestLogin;
+    private String currentTestPassword;
+    private Integer currentCourierId;
 
-public class CourierCreateTest extends BaseCourierTest {
-
-    @Step("Успешно курьер создан")
-    @Test
-    public void createCourierSuccess() {
-        String login = "courierLoginSuccess" + System.currentTimeMillis();
-        createTestCourier(login, "password1234", "courierNameSuccess");
+    @After
+    public void tearDown() {
+        if (currentCourierId != null) {
+            CourierApiClient.deleteCourierById(currentCourierId);
+        }
     }
 
-    @Step("Нельзя создать курьера без логина")
+    @Description("Курьер создаётся с валидными данными, возвращает 201 и ok=true")
+    @Test
+    public void createCourierSuccess() {
+        currentTestLogin = "courierLoginSuccess" + System.currentTimeMillis();
+        currentTestPassword = "password1234";
+        CourierPojo body = new CourierPojo(currentTestLogin, currentTestPassword, "courierNameSuccess");
+
+        CourierApiClient.createCourier(body);
+
+        currentCourierId = CourierApiClient.getCourierIdByLoginCredentials(currentTestLogin, currentTestPassword);
+    }
+
+    @Description("При отсутствии login в теле запроса возвращает 400")
     @Test
     public void createCourierMissingLogin() {
         CourierPojo body = new CourierPojo(null, "password1234", "courierNameMissingLogin");
-
-        RestAssured
-                .given()
-                .header("Content-type", "application/json")
-                .body(body)
-                .when()
-                .post(CREATE_PATH)
-                .then()
-                .statusCode(400)
-                .body("message", containsString("Недостаточно данных для создания учетной записи"));
+        CourierApiClient.createCourierExpectBadRequest(
+                body,
+                "Недостаточно данных для создания учетной записи"
+        );
     }
 
-    @Step("Нельзя создать курьера без пароля")
-    @Test //этот тест падает - баг, в задании нет инфо
+    @Description("При отсутствии password в теле запроса ожидается 400")
+    @Test
     public void createCourierMissingPassword() {
-        String login = "courierLoginMissingPassword" + System.currentTimeMillis();
-        CourierPojo body = new CourierPojo(login, null, "courierNameMissingPassword");
+        currentTestLogin = "courierLoginMissingPassword" + System.currentTimeMillis();
+        currentTestPassword = "password1234";
+        CourierPojo body = new CourierPojo(currentTestLogin, null, "courierNameMissingPassword");
 
-        RestAssured
-                .given()
-                .header("Content-type", "application/json")
-                .body(body)
-                .when()
-                .post(CREATE_PATH)
-                .then()
-                .statusCode(400)
-                .body("message", containsString("Недостаточно данных для создания учетной записи"));
+        CourierApiClient.createCourierExpectBadRequest(
+                body,
+                "Недостаточно данных для создания учетной записи"
+        );
     }
 
-    @Step("Нельзя создать двух курьеров с одинаковым логином")
+    @Description("Попытка создать второго курьера с тем же логином: ожидается 409")
     @Test
     public void createCourierDuplicateLogin() {
-        String login = "twoCourierSameLogin" + System.currentTimeMillis();
+        currentTestLogin = "twoCourierSameLogin" + System.currentTimeMillis();
+        currentTestPassword = "password1234";
 
-        createTestCourier(login, "password1234", "courierFirstName");
+        CourierPojo firstBody = new CourierPojo(currentTestLogin, currentTestPassword, "courierFirstName");
+        CourierApiClient.createCourier(firstBody);
 
-        CourierPojo body = new CourierPojo(login, "password5678", "courierSecondName");
+        currentCourierId = CourierApiClient.getCourierIdByLoginCredentials(currentTestLogin, currentTestPassword);
 
-        RestAssured
-                .given()
-                .header("Content-type", "application/json")
-                .body(body)
-                .when()
-                .post(CREATE_PATH)
-                .then()
-                .statusCode(409)
-                .body("message", containsString("Этот логин уже используется"));
+        CourierPojo secondBody = new CourierPojo(currentTestLogin, "password5678", "courierSecondName");
+        CourierApiClient.createCourierExpectConflict(
+                secondBody,
+                "Этот логин уже используется"
+        );
     }
 }

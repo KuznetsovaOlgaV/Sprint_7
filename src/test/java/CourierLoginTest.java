@@ -1,86 +1,87 @@
-import io.restassured.RestAssured;
-import io.qameta.allure.junit4.AllureJunit4;
-import org.junit.runner.RunWith;
-import pojo.LoginRequestPojo;
-import io.qameta.allure.Step;
+import api.CourierApiClient;
+import io.qameta.allure.Description;
+import org.junit.After;
+import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
+import pojo.LoginRequestPojo;
+import org.apache.http.HttpStatus;
 
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.notNullValue;
+public class CourierLoginTest {
 
+    private String testLogin;
+    private String testPassword;
+    private Integer testCourierId;
 
-public class CourierLoginTest extends BaseCourierTest {
+    @Before
+    public void setUp() {
+        testLogin = "login_" + System.currentTimeMillis() + "_" + (int) (Math.random() * 1000);
+        testPassword = "password1234";
 
-    private static final String LOGIN_PATH = "/api/v1/courier/login";
+        var courier = new pojo.CourierPojo(testLogin, testPassword, "CourierName");
+        CourierApiClient.createCourier(courier);
 
-    @Step("Успешно курьер авторизуется")
+        testCourierId = CourierApiClient.getCourierIdByLoginCredentials(testLogin, testPassword);
+    }
+
+    @After
+    public void tearDown() {
+        if (testCourierId != null) {
+            CourierApiClient.deleteCourierById(testCourierId);
+        }
+    }
+
+    @Description("Курьер с валидными учётными данными успешно авторизуется, возвращается 200 и id курьера")
     @Test
     public void loginSuccess() {
-        String login = "loginSuccess" + System.currentTimeMillis();
-        createTestCourier(login, "password1234", "courierName");
-
-        LoginRequestPojo body = new LoginRequestPojo(login, "password1234");
-
-        RestAssured
-                .given()
-                .header("Content-type", "application/json")
-                .body(body)
-                .when()
-                .post(LOGIN_PATH)
-                .then()
-                .statusCode(200)
-                .body("id", notNullValue());
+        Integer id = CourierApiClient.getCourierIdByLoginCredentials(testLogin, testPassword);
+        Assert.assertNotNull("Ожидался id курьера не null", id);
     }
 
-    @Step("Ошибка без логина")
+
+    @Description("При отсутствии login в запросе возвращается 400")
     @Test
     public void loginMissingLogin() {
-        LoginRequestPojo body = new LoginRequestPojo(null, "password1234");
-
-        RestAssured
-                .given()
-                .header("Content-type", "application/json")
-                .body(body)
-                .when()
-                .post(LOGIN_PATH)
-                .then()
-                .statusCode(400)
-                .body("message", containsString("Недостаточно данных для входа"));
+        LoginRequestPojo body = new LoginRequestPojo(null, testPassword);
+        CourierApiClient.loginExpectError(
+                body,
+                HttpStatus.SC_BAD_REQUEST,
+                "Недостаточно данных для входа"
+        );
     }
 
-    @Step("Ошибка без пароля")
-    // тест по докам 400, падает с 504 - баг в задании не указано, потому показываю тест был, но скрыла, т.к. иначе не формируется отчет
+ //тест по докам 400, падает с 504 - баг в задании не указано
+    @Description("При отсутствии password в запросе ожидается 400")
     @Test
     public void loginMissingPassword() {
-        String login = "loginMissingPasswordMistake" + System.currentTimeMillis();
-        LoginRequestPojo body = new LoginRequestPojo(login, null);
-
-        RestAssured
-                .given()
-                .header("Content-type", "application/json")
-                .body(body)
-                .when()
-                .post(LOGIN_PATH)
-                .then()
-                .statusCode(400)
-                .body("message", containsString("Недостаточно данных для входа"));
+        LoginRequestPojo body = new LoginRequestPojo(testLogin, null);
+        CourierApiClient.loginExpectError(
+                body,
+                HttpStatus.SC_BAD_REQUEST,
+                "Недостаточно данных для входа"
+        );
     }
 
-    @Step("Ошибка неверная пара логин/пароль")
+    @Description("Сервер при несуществующем логине возвращает 404")
     @Test
-    public void wrongCredentials() {
-        String login = "wrongLogin" + System.currentTimeMillis();
-        String password = "wrongPassword";
-        LoginRequestPojo body = new LoginRequestPojo(login, password);
+    public void wrongLogin() {
+        String nonExistingLogin = "wrongLogin_" + System.currentTimeMillis();
+        LoginRequestPojo body = new LoginRequestPojo(nonExistingLogin, "anyPassword");
+        CourierApiClient.loginExpectError(
+                body,
+                HttpStatus.SC_NOT_FOUND,
+                "Учетная запись не найдена"
+        );
+    }
 
-        RestAssured
-                .given()
-                .header("Content-type", "application/json")
-                .body(body)
-                .when()
-                .post(LOGIN_PATH)
-                .then()
-                .statusCode(404)
-                .body("message", containsString("Учетная запись не найдена"));
+    @Description("Сервер при верном логине, но неверном пароле возвращает 404")
+    @Test
+    public void wrongPassword() {
+        LoginRequestPojo body = new LoginRequestPojo(testLogin, "wrongPassword123");
+        CourierApiClient.loginExpectError(
+                body,
+                HttpStatus.SC_NOT_FOUND,
+                "Учетная запись не найдена"
+        );
     }
 }
